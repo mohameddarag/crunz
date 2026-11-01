@@ -13,7 +13,14 @@
 |
 */
 
-foreach ([        
+$managedClosure = getenv('CRUNZ_MANAGED_CLOSURE') === '1'
+    && isset($_SERVER['argv'][1])
+    && $_SERVER['argv'][1] === 'closure:run';
+if ($managedClosure) {
+    ini_set('display_errors', 'stderr');
+}
+
+foreach ([
          
         __DIR__ . '/../autoload.php',
         __DIR__ . '/../../autoload.php',
@@ -41,12 +48,14 @@ if (!defined('AUTOLOAD_PHP_FILE')) {
 require AUTOLOAD_PHP_FILE;
 
 // Setting the base directory as an environment variable
-setbase(
-    getroot(AUTOLOAD_PHP_FILE)
-);
+if (!$managedClosure || getbase() === false) {
+    setbase(
+        getroot(AUTOLOAD_PHP_FILE)
+    );
+}
 
 // Setting the handler for catching/logging fatal and parse errors. 
-Crunz\ErrorHandler::getInstance()->set();
+Crunz\ErrorHandler::getInstance()->set($managedClosure);
 
 
 $kernel = (new Crunz\Console\CommandKernel('Crunz Command Line Interface', 'v1.4.0'))

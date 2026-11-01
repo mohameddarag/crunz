@@ -2,7 +2,7 @@
 
 use Crunz\Schedule;
 
-class ScheduleTest extends PHPUnit_Framework_TestCase  {
+class ScheduleTest extends \PHPUnit\Framework\TestCase  {
     
     public function testRun()
     {

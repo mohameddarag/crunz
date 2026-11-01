@@ -119,20 +119,18 @@ class EventRunner {
                         continue;
                     }
 
-                    if ($proc->isSuccessful()) {
-                        
-                        $event->outputStream .= $proc->getOutput();
-                        $event->outputStream .= $this->invoke($event->afterCallbacks());                       
-
-                        $this->handleOutput($event);
-                    
-                    } else {
-                        
-                        // Calling registered error callbacks with an instance of $event as argument
-                        $this->invoke($schedule->errorCallbacks(), [$event]); 
-                        
-                        $this->handleError($event);
-
+                    try {
+                        if ($proc->isSuccessful()) {
+                            $event->outputStream .= $proc->getOutput();
+                            $event->outputStream .= $this->invoke($event->afterCallbacks());
+                            $this->handleOutput($event);
+                        } else {
+                            // Calling registered error callbacks with an instance of $event as argument
+                            $this->invoke($schedule->errorCallbacks(), [$event]);
+                            $this->handleError($event);
+                        }
+                    } finally {
+                        $event->releaseLock();
                     }
 
                     // Dismiss the event if it's finished
@@ -203,7 +201,7 @@ class EventRunner {
         if ($this->config('log_errors')) {
             $this->logger->error($this->formatEventError($event));
         } else {
-            $this->display($event->getProcess()->getErrorOutput());
+            $this->display($this->formatEventError($event));
         }
 
         // Send error as email as configured
@@ -243,13 +241,13 @@ class EventRunner {
      */
     protected function formatEventError(Event $event)
     {
-        return $event->description
-               . '('
-               . $event->getCommandForDisplay()
-               . ') '
-               . PHP_EOL
-               . $event->getProcess()->getErrorOutput()
-               . PHP_EOL;   
+        $process = $event->getProcess();
+
+        return 'Event ' . $event->getId()
+               . ($event->description ? ' (' . $event->description . ')' : '')
+               . ' failed with exit code ' . $process->getExitCode() . PHP_EOL
+               . 'STDOUT:' . PHP_EOL . $process->getOutput() . PHP_EOL
+               . 'STDERR:' . PHP_EOL . $process->getErrorOutput() . PHP_EOL;
     }
 
     /**

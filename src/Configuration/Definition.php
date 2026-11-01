@@ -11,6 +11,7 @@ class Definition implements ConfigurationInterface {
     {
         $treeBuilder = new TreeBuilder();
         $rootNode    = $treeBuilder->root('crunz');
+        $nullOutput  = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
 
         $rootNode            
             
@@ -32,7 +33,7 @@ class Definition implements ConfigurationInterface {
                 ->end()
 
                 ->scalarNode('errors_log_file')
-                    ->defaultValue('/dev/null')
+                    ->defaultValue($nullOutput)
                     ->info('Path to errors log' .                  PHP_EOL)
                 ->end()
 
@@ -42,7 +43,7 @@ class Definition implements ConfigurationInterface {
                 ->end()
 
                 ->scalarNode('output_log_file')
-                    ->defaultValue('/dev/null')
+                    ->defaultValue($nullOutput)
                     ->info('Path to output logs' .                 PHP_EOL)
                 ->end()
 

@@ -16,7 +16,7 @@ class Utils
         $pattern  = '/(?<=[a-z])(?=[A-Z])/x';
         $segments = preg_split($pattern, $text);
         
-        return strtolower(join($segments, ' '));
+        return strtolower(join(' ', $segments));
     }
 
     /**

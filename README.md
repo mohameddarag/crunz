@@ -11,6 +11,90 @@ Crunz is capable of executing any kind of executable command as well as PHP clos
 
 ## Installation
 
+### This fork and PHP 8.2
+
+This fork retains `schedule:run [source] [db] [client_url]`. Task files are still
+required in the command's scope, so `$this->arguments` remains available.
+Values captured with `use (...)`, the task's original `__FILE__`/`__DIR__`,
+cron expressions (including the existing sixth field), timezones and filters
+are preserved. No application bootstrap or database is needed by the tests.
+
+The minimum PHP version is now **7.3**, required by
+`laravel/serializable-closure` 1.x. Carbon is deliberately kept on the 1.x
+constraint to accommodate legacy consumers. On PHP 8.2, use the patched
+`mohameddarag/Carbon` tag `1.39.1`, commit
+`96f574d7910dbd6cddd2b6b9123e7c65c6bd2072`; upstream Carbon 1.39.1 passes
+`false` to `setLastErrors(array ...)` and fails during due-event evaluation.
+The fork removes that parameter type restriction. Consumer applications must
+declare the Carbon VCS repository in their own root `composer.json`;
+dependency repositories are not inherited. Keep the consumer's tested lock
+file and verify the installed source reference, not just its version number.
+Also ensure the consumer selects this Crunz fork's revision rather than its
+previous fork or upstream package.
+
+**Dependency blocker:** recent Composer releases block Carbon 1 under advisory
+`PKSA-csyb-yc4p-mnbs`. The date-parser patch does not resolve that separate
+advisory. No advisory exception or platform-check bypass is committed here.
+Installing or updating dependencies, including in CI, requires an explicit
+deployment-owner decision about that advisory. Legacy Symfony, Guzzle, cron
+and SwiftMailer dependencies also remain; this change is not a security
+upgrade or a guarantee of deprecation-free operation.
+
+Closures now run using the parent's `PHP_BINARY` and this package's PHP entry
+point, with quoted arguments, the configured working directory, and inherited
+environment variables. Managed closure children preserve `CRUNZ_BASE_DIR`.
+They send PHP diagnostics to stderr; the parent handles failed-child reporting
+once through its existing logging/email configuration. The child's buffer
+handler delegates fatal errors to the parent while retaining its configured
+nonfatal logging/email behavior. Error reports include
+the child exit code and stdout/stderr, but not the command line or serialized
+closure. Application-generated output may itself contain sensitive information;
+restrict access to diagnostic files and email recipients.
+
+The top-level output-buffer handler returns buffered output unchanged. It
+reports the actual last PHP error's type, message, file and line, even with an
+empty buffer: fatal errors at ERROR, warnings/notices at WARNING, deprecations
+at NOTICE. The same last error is not re-reported on subsequent buffer flushes.
+For compatibility, it still uses `errors_log_file` independently of
+`log_errors`, and `email_errors` still applies to nonfatal errors as well.
+Event-runner reporting continues to honor `log_errors` and `email_errors`.
+`error_get_last()` is not a complete history of every warning.
+
+Before deploying, stop new scheduler invocations and let running children
+finish. Update parent and child code and dependencies together: the serialized
+closure wire format and closure lock keys have changed. Check for stale locks
+only after confirming their processes have finished. Windows overlap checks
+now use `tasklist`; Unix retains its POSIX check. Existing lock acquisition
+is not atomic, and forced parent termination can still leave locks behind.
+Default log destinations use the platform's null device (`NUL` on Windows).
+Closure lock fingerprints use deterministic serializer references rather than
+PHP object hashes, and retain captured values, user and working-directory
+identity. The lock-only adapter uses Laravel's protected native-serializer
+hook; rerun the cross-process lock regressions when changing that dependency.
+Success callbacks are not run for failed children; their locks are nevertheless
+released. `schedule:run` retains its existing successful command status when
+an individual child fails; monitor the reported child exit code.
+
+Configure Windows Task Scheduler's **Start in** directory and CLI PHP/INI
+explicitly. Run isolated smoke tests under the actual scheduler account, not
+IIS. IIS settings, Task Scheduler permissions, Unix execution and PHP 7.3/8.2
+still need deployment-environment validation. The local compatibility run used
+Windows CLI PHP 8.5.8, not PHP 8.2; the official 8.2 runtime download was
+unavailable. Dependencies emitted deprecations, retained in stderr rather than
+suppressed.
+
+Run the regression suite after installing the approved dependencies:
+
+```bash
+php -d display_errors=stderr vendor/bin/phpunit
+```
+
+Tests use temporary task files, fake email delivery and an in-memory mail
+transport. They do not execute application jobs or contact production services.
+The historical `sendOutputTo()`/`appendOutputTo()` flags remain unchanged:
+this fork stores those settings but does not currently wire them into process
+redirection. Output-routing redesign and broader dependency upgrades are deferred.
+
 To install it:
 
 ```bash

@@ -7,7 +7,8 @@ use LogicException;
 use Cron\CronExpression;
 use GuzzleHttp\Client as HttpClient;
 use Symfony\Component\Process\Process;
-use SuperClosure\Serializer;
+use Symfony\Component\Process\ProcessUtils;
+use Laravel\SerializableClosure\SerializableClosure;
 
 class Event
 {
@@ -31,6 +32,8 @@ class Event
      * @var Symfony\Component\Process\Process
      */
     protected $process;
+
+    protected $lockPid;
 
     /**
      * The cron expression representing the event's frequency.
@@ -195,16 +198,8 @@ class Event
     {
         $command = '';        
         
-        if ($this->cwd) {           
-            if($this->user) {
-                $command .= $this->sudo();
-            }
-
-            $command .=  'cd ' . $this->cwd . '; ';
-        }
-    
         if ($this->user) {
-           $this->sudo();
+            $command .= $this->sudo($this->user);
         }
         
         $command .= $this->isClosure() ? $this->serializeClosure($this->command) : $this->command;
@@ -221,7 +216,7 @@ class Event
      */
     protected function sudo($user)
     {
-        return 'sudo -u' . $user . ' ';
+        return 'sudo -u ' . ProcessUtils::escapeArgument($user) . ' ';
     }
 
     /**
@@ -244,8 +239,14 @@ class Event
      */
     protected function serializeClosure($closure)
     {    
-        $closure = (new Serializer())->serialize($closure);
-        return Utils::getAutoloadDir() . '\bin\crunz closure:run ' . http_build_query([$closure]);
+        $closure = serialize(new SerializableClosure($closure));
+
+        return (new Process([
+            PHP_BINARY,
+            dirname(__DIR__) . DIRECTORY_SEPARATOR . 'crunz',
+            'closure:run',
+            http_build_query([$closure]),
+        ]))->getCommandLine();
     }
 
     /**
@@ -306,7 +307,11 @@ class Event
      */
     public function start()
     {
-        $this->setProcess(new Process($this->buildCommand()));
+        $environment = array_replace(getenv(), array_filter($_ENV, 'is_string'));
+        if ($this->isClosure()) {
+            $environment['CRUNZ_MANAGED_CLOSURE'] = '1';
+        }
+        $this->setProcess(new Process($this->buildCommand(), $this->cwd, $environment));
         $this->getProcess()->start();
 
         if ($this->preventOverlapping) {
@@ -749,10 +754,7 @@ class Event
 
         // Delete the lock file when the event is completed
         $this->after(function() {
-            $lockfile = $this->lockFile();
-            if (file_exists($lockfile)) {
-                unlink($lockfile);
-            }
+            $this->releaseLock();
         });
 
         return $this;
@@ -989,7 +991,7 @@ class Event
             return $this->description;
         }
 
-        return $this->buildCommand();
+        return $this->getCommandForDisplay();
     }
 
     /**
@@ -1103,7 +1105,10 @@ class Event
      */
     protected function lock()
     {
-        file_put_contents($this->lockFile(), $this->process->getPid());
+        $this->lockPid = $this->process->getPid();
+        if ($this->lockPid !== null) {
+            file_put_contents($this->lockFile(), $this->lockPid);
+        }
     }
 
     /**
@@ -1115,7 +1120,37 @@ class Event
     {        
         $pid = $this->lastPid();
 
-        return (! is_null($pid) && posix_getsid($pid)) ? true : false;
+        if ($pid === null) {
+            return false;
+        }
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $process = new Process(['tasklist', '/FI', 'PID eq ' . $pid, '/FO', 'CSV', '/NH']);
+            $process->run();
+            if (!$process->isSuccessful()) {
+                throw new \RuntimeException('Cannot check the event lock: ' . $process->getErrorOutput());
+            }
+            foreach (preg_split('/\r?\n/', trim($process->getOutput())) as $line) {
+                $fields = str_getcsv($line, ',', '"', '\\');
+                if (isset($fields[1]) && $fields[1] === (string) $pid) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return (bool) posix_getsid($pid);
+    }
+
+    public function releaseLock()
+    {
+        if ($this->preventOverlapping) {
+            $lockfile = $this->lockFile();
+            if (file_exists($lockfile) && $this->lastPid() === $this->lockPid) {
+                unlink($lockfile);
+            }
+        }
     }
 
     /**
@@ -1138,7 +1173,14 @@ class Event
      */
     public function lockFile()
     {
-        return rtrim(sys_get_temp_dir(), '/') . '/crunz-' . md5($this->buildCommand());
+        $command = $this->isClosure()
+            ? serialize([$this->user, new ClosureLockSerializer($this->command)])
+            : $this->buildCommand();
+        if ($this->cwd) {
+            $command = 'cd ' . $this->cwd . '; ' . $command;
+        }
+
+        return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'crunz-' . md5($command);
     }
 
     /**

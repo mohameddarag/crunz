@@ -3,7 +3,7 @@
 use Crunz\Event;
 use Carbon\Carbon;
 
-class EventTest extends PHPUnit_Framework_TestCase {
+class EventTest extends \PHPUnit\Framework\TestCase {
 
     /**
      * The default configuration timezone.
@@ -19,7 +19,7 @@ class EventTest extends PHPUnit_Framework_TestCase {
      */
     protected $id;
 
-    public function setUp()
+    protected function setUp(): void
     {
         $this->id = uniqid();
         
@@ -27,7 +27,7 @@ class EventTest extends PHPUnit_Framework_TestCase {
         date_default_timezone_set('UTC');
     }
 
-    public function tearDown()
+    protected function tearDown(): void
     {
         date_default_timezone_set($this->defaultTimezone);
         Carbon::setTestNow(null);
@@ -38,6 +38,11 @@ class EventTest extends PHPUnit_Framework_TestCase {
      */
     public function testDynamicMethods()
     {
+        Carbon::setTestNow(Carbon::create(2015, 4, 12, 0, 0, 0));
+
+        $e = new Event($this->id, 'php foo');
+        $this->assertEquals('*/10 * * * * *', $e->everyTenMinutes()->getExpression());
+
         $e = new Event($this->id, 'php foo');
         $this->assertEquals('*/6 * * * * *',   $e->everySixMinutes()->getExpression());
 

@@ -36,14 +36,12 @@ class Singleton {
     }
 
     /**
-     * Private unserialize method to prevent unserializing of the *Singleton*
-     * instance.
+     * Legacy unserialization hook.
      *
      * @return void
      */
-    private function __wakeup()
-    { 
-       
-    } 
+    public function __wakeup()
+    {
+    }
 
 }
