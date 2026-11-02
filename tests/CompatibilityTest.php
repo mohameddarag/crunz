@@ -212,12 +212,21 @@ class CompatibilityTest extends TestCase
         $this->assertSame('', $output);
         $message = file_get_contents($log);
         $this->assertSame(1, substr_count($message, 'crunz.ERROR:'));
+        $this->assertStringContainsString('isolated closure warning before fatal', $message);
         $this->assertStringContainsString('isolated closure fatal', $message);
+        $this->assertStringContainsString('PHP fatal error (type 256):', $message);
         $this->assertStringContainsString('exit code 255', $message);
+        $this->assertStringContainsString('on line ', $message);
         $this->assertStringNotContainsString('SerializableClosure%22', $message);
+        $this->assertStringNotContainsString('laravel-serializable-closure://', $message);
+        $this->assertStringNotContainsString('function () {', $message);
+        $this->assertStringNotContainsString(' on line 123', $message);
         $this->assertCount(1, $mailer->messages);
         $this->assertStringContainsString('isolated closure fatal', $mailer->messages[0][1]);
         $this->assertStringContainsString('exit code 255', $mailer->messages[0][1]);
+        $this->assertStringNotContainsString('laravel-serializable-closure://', $mailer->messages[0][1]);
+        $this->assertStringNotContainsString('function () {', $mailer->messages[0][1]);
+        $this->assertStringNotContainsString(' on line 123', $mailer->messages[0][1]);
     }
 
     public function testLockDetectionAndCleanupForSuccessAndFailure()
@@ -314,11 +323,22 @@ class CompatibilityTest extends TestCase
             $this->assertStringNotContainsString('Fatal', $message);
             $this->assertSame(1, substr_count($message, 'isolated ' . $mode));
             $this->assertStringNotContainsString('buffered output', $message);
+            $this->assertStringNotContainsString('laravel-serializable-closure://', $message);
+            $this->assertStringNotContainsString('function () {', $message);
             $this->assertStringContainsString($mode === 'warning' ? '.WARNING:' : '.NOTICE:', $message);
             $email = json_decode(file_get_contents($log . '.mail'), true);
             $this->assertStringNotContainsString('Fatal', $email[0]);
             $this->assertStringContainsString('isolated ' . $mode, $email[1]);
         }
+    }
+
+    public function testIdenticalWarningsAreReportedEachTime()
+    {
+        $process = new Process([PHP_BINARY, __DIR__ . '/fixtures/process.php', 'repeat-warning']);
+        $process->run();
+
+        $this->assertSame(0, $process->getExitCode());
+        $this->assertSame('2', $process->getOutput());
     }
 
     public function testClosureSerializationPreservesBindingAndNestedCaptures()
@@ -396,9 +416,13 @@ class CompatibilityTest extends TestCase
     public function testDefaultLogDestinationsUseThePlatformNullDevice()
     {
         $configuration = \Crunz\Configuration\Configuration::getInstance();
-        $expected = DIRECTORY_SEPARATOR === '\\' ? 'php://memory' : '/dev/null';
+        $expected = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
         $this->assertSame($expected, $configuration->get('errors_log_file'));
         $this->assertSame($expected, $configuration->get('output_log_file'));
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $logger = \Crunz\Logger\LoggerFactory::makeOne(['notice' => 'NUL']);
+            $this->assertTrue($logger->write('discarded isolated diagnostic', 'notice'));
+        }
     }
 
     public function testMailerBuildsAndSendsThroughInMemoryTransport()

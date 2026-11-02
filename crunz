@@ -17,7 +17,10 @@ $managedClosure = getenv('CRUNZ_MANAGED_CLOSURE') === '1'
     && isset($_SERVER['argv'][1])
     && $_SERVER['argv'][1] === 'closure:run';
 if ($managedClosure) {
-    ini_set('display_errors', 'stderr');
+    if (ini_set('display_errors', '0') === false || ini_set('log_errors', '0') === false) {
+        fwrite(STDERR, 'Unable to configure managed closure diagnostics.' . PHP_EOL);
+        exit(1);
+    }
 }
 
 foreach ([

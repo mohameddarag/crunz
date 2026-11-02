@@ -4,6 +4,7 @@ namespace Crunz\Logger;
 
 use Monolog\Logger as MonologLogger;
 use Monolog\Handler\StreamHandler;
+use Monolog\Handler\NullHandler;
 use Monolog\Formatter\LineFormatter;
 use Crunz\Configuration\Configurable;
 use Crunz\Singleton;
@@ -64,6 +65,13 @@ class Logger extends Singleton {
         $handler->setFormatter($this->getDefaultFormatter()); 
 
         return $this;  
+    }
+
+    public function addNullHandler($level)
+    {
+        $this->logger->pushHandler(new NullHandler($this->parseLevel($level)));
+
+        return $this;
     }
 
     /**

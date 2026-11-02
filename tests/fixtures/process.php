@@ -19,6 +19,27 @@ if ($mode === 'locked-success' || $mode === 'locked-failure') {
 }
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
+if ($mode === 'repeat-warning') {
+    $handler = new \Crunz\ErrorHandler();
+    $logger = new class {
+        public $messages = [];
+
+        public function write($message, $level)
+        {
+            $this->messages[] = [$message, $level];
+        }
+    };
+    $property = new ReflectionProperty($handler, 'logger');
+    $property->setValue($handler, $logger);
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '0');
+    for ($i = 0; $i < 2; ++$i) {
+        trigger_error('repeated isolated warning', E_USER_WARNING);
+        $handler->catchErrors('');
+    }
+    echo count($logger->messages);
+    exit(0);
+}
 if ($mode === 'closure-lock') {
     $objects = [];
     for ($i = 0; $i < $argv[2]; ++$i) {

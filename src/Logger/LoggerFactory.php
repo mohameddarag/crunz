@@ -24,6 +24,11 @@ class LoggerFactory {
                 continue;
             }
 
+            if ($file === 'NUL') {
+                $logger->addNullHandler($stream);
+                continue;
+            }
+
             $logger->addStream(   
                 $file,
                 $stream,

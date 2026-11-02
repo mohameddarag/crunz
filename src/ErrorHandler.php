@@ -23,8 +23,8 @@ class ErrorHandler extends Singleton {
      */
     protected $mailer;
 
-    protected $reportedError;
     protected $delegateFatalErrors = false;
+    protected $managedError;
 
     /**
      * Catch Fatal Errors
@@ -48,7 +48,32 @@ class ErrorHandler extends Singleton {
     public function set($delegateFatalErrors = false)
     {
         $this->delegateFatalErrors = $delegateFatalErrors;
+        if ($delegateFatalErrors) {
+            set_error_handler([$this, 'reportManagedError']);
+        }
         ob_start([&$this, 'catchErrors']);
+    }
+
+    public function reportManagedError($type, $message, $file, $line)
+    {
+        if (!(error_reporting() & $type)) {
+            return true;
+        }
+
+        if (in_array($type, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+            return false;
+        }
+
+        $deprecated = in_array($type, [E_DEPRECATED, E_USER_DEPRECATED], true);
+        $this->managedError = [
+            'type' => $type,
+            'message' => $message,
+            'file' => $file,
+            'line' => $line,
+        ];
+        fwrite(STDERR, $this->formatError($this->managedError, false, $deprecated) . PHP_EOL);
+
+        return true;
     }
 
     /**
@@ -61,22 +86,19 @@ class ErrorHandler extends Singleton {
     public function catchErrors($buffer)
     {
         $error = error_get_last();
-        if ($error !== null && $error !== $this->reportedError) {
-            $this->reportedError = $error;
+        if ($error === null && $this->delegateFatalErrors) {
+            $error = $this->managedError;
+        }
+        if ($error !== null) {
             $fatal = in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true);
             if ($fatal && $this->delegateFatalErrors) {
+                fwrite(STDERR, $this->formatError($error) . PHP_EOL);
                 return $buffer;
             }
+            error_clear_last();
             $deprecated = in_array($error['type'], [E_DEPRECATED, E_USER_DEPRECATED], true);
             $level = $fatal ? 'error' : ($deprecated ? 'notice' : 'warning');
-            $message = sprintf(
-                'PHP %s (type %d): %s in %s on line %d',
-                $fatal ? 'fatal error' : ($deprecated ? 'deprecation' : 'warning/notice'),
-                $error['type'],
-                $error['message'],
-                $error['file'],
-                $error['line']
-            );
+            $message = $this->formatError($error, $fatal, $deprecated);
             $this->logger->write($message, $level);
 
             // Send error as email as configured
@@ -89,6 +111,34 @@ class ErrorHandler extends Singleton {
         }
 
         return $buffer;       
+    }
+
+    private function formatError(array $error, $fatal = null, $deprecated = false)
+    {
+        if ($fatal === null) {
+            $fatal = in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true);
+        }
+
+        $file = $this->formatErrorFile($error['file']);
+        $message = str_replace($error['file'], $file, $error['message']);
+
+        return sprintf(
+            'PHP %s (type %d): %s in %s on line %d',
+            $fatal ? 'fatal error' : ($deprecated ? 'deprecation' : 'warning/notice'),
+            $error['type'],
+            $message,
+            $file,
+            $error['line']
+        );
+    }
+
+    private function formatErrorFile($file)
+    {
+        if (strpos($file, 'laravel-serializable-closure://') === 0) {
+            return 'serialized-closure:' . hash('sha256', $file);
+        }
+
+        return $file;
     }
 
 }
