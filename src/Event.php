@@ -7,7 +7,6 @@ use LogicException;
 use Cron\CronExpression;
 use GuzzleHttp\Client as HttpClient;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\ProcessUtils;
 use Laravel\SerializableClosure\SerializableClosure;
 
 class Event
@@ -216,7 +215,9 @@ class Event
      */
     protected function sudo($user)
     {
-        return 'sudo -u ' . ProcessUtils::escapeArgument($user) . ' ';
+        $escapedUser = (new Process([$user]))->getCommandLine();
+
+        return 'sudo -u ' . $escapedUser . ' ';
     }
 
     /**

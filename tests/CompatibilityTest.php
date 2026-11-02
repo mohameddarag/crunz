@@ -375,7 +375,7 @@ class CompatibilityTest extends TestCase
     public function testDefaultLogDestinationsUseThePlatformNullDevice()
     {
         $configuration = \Crunz\Configuration\Configuration::getInstance();
-        $expected = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $expected = DIRECTORY_SEPARATOR === '\\' ? 'php://memory' : '/dev/null';
         $this->assertSame($expected, $configuration->get('errors_log_file'));
         $this->assertSame($expected, $configuration->get('output_log_file'));
     }

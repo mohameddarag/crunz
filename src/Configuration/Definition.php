@@ -11,7 +11,7 @@ class Definition implements ConfigurationInterface {
     {
         $treeBuilder = new TreeBuilder();
         $rootNode    = $treeBuilder->root('crunz');
-        $nullOutput  = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $nullOutput  = DIRECTORY_SEPARATOR === '\\' ? 'php://memory' : '/dev/null';
 
         $rootNode            
             
