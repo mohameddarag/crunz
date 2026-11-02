@@ -66,7 +66,9 @@ closure wire format and closure lock keys have changed. Check for stale locks
 only after confirming their processes have finished. Windows overlap checks
 now use `tasklist`; Unix retains its POSIX check. Existing lock acquisition
 is not atomic, and forced parent termination can still leave locks behind.
-Default log destinations use the platform's null device (`NUL` on Windows).
+Default log destinations use `/dev/null` on Unix and an in-memory stream on
+Windows. Child processes explicitly inherit the parent environment; string
+values in `$_ENV` retain precedence over `getenv()`.
 Closure lock fingerprints use deterministic serializer references rather than
 PHP object hashes, and retain captured values, user and working-directory
 identity. The lock-only adapter uses Laravel's protected native-serializer

@@ -313,6 +313,7 @@ class Event
             $environment['CRUNZ_MANAGED_CLOSURE'] = '1';
         }
         $this->setProcess(new Process($this->buildCommand(), $this->cwd, $environment));
+        $this->getProcess()->inheritEnvironmentVariables(true);
         $this->getProcess()->start();
 
         if ($this->preventOverlapping) {

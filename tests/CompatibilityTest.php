@@ -95,6 +95,27 @@ class CompatibilityTest extends TestCase
         }
     }
 
+    public function testStartingEventDoesNotDeprecateEnvironmentInheritance()
+    {
+        $deprecations = [];
+        set_error_handler(function ($type, $message) use (&$deprecations) {
+            if ($type === E_USER_DEPRECATED && strpos($message, 'Not inheriting environment variables') !== false) {
+                $deprecations[] = $message;
+                return true;
+            }
+            return false;
+        });
+        try {
+            $event = (new Schedule())->run($this->command('empty-success'));
+            $event->start();
+            $event->getProcess()->wait();
+        } finally {
+            restore_error_handler();
+        }
+        $this->assertSame([], $deprecations);
+        $this->assertSame(0, $event->getProcess()->getExitCode());
+    }
+
     public function testSuccessfulProcessCallbacksAndWorkingDirectory()
     {
         $schedule = new Schedule();
